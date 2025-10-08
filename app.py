@@ -333,7 +333,7 @@ def health_check():
         "timestamp": datetime.now().isoformat(),
         "service": "TwiML Server with Cascade Calling",
         "contact_count": len(ALERT_PHONE_NUMBERS),
-        "contacts": [c["name"] for c in ALERT_PHONE_NUMBERS]
+        "contacts": [{"name": c["name"], "number": c["number"], "wait_time": c["wait_time"]} for c in ALERT_PHONE_NUMBERS]
     }), 200
 
 

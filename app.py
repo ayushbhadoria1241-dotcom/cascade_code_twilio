@@ -389,6 +389,36 @@ def test_cascade():
     }), 200
 
 
+@app.route('/test-direct-call', methods=['POST'])
+def test_direct_call():
+    """Test a single direct call to debug Twilio connection"""
+    try:
+        logger.info("🧪 Testing direct Twilio API call...")
+        
+        # Make one direct call
+        result = make_twilio_call(
+            "+917568735073",
+            "debug_dag",
+            "debug_task",
+            "failed"
+        )
+        
+        return jsonify({
+            "status": "Direct call test completed",
+            "result": result,
+            "twilio_account": TWILIO_ACCOUNT_SID,
+            "from_number": TWILIO_PHONE_NUMBER,
+            "to_number": "+917568735073",
+            "twiml_url": f"{TWIML_BASE_URL}/airflow-alert?dag_id=debug_dag&task_id=debug_task&state=failed"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "Error",
+            "error": str(e)
+        }), 500
+
+
 if __name__ == '__main__':
     import sys
     print("=" * 70, flush=True)

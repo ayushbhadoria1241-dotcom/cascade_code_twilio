@@ -18,7 +18,7 @@ TWILIO_ACCOUNT_SID = "AC091da57b9e4c8866d047628437f43804"
 TWILIO_AUTH_TOKEN = "bed3b05e254e8353ae77c58e67dd29b3"
 TWILIO_PHONE_NUMBER = "+13366003611"
 
-# Cascade call list - Priority order (all set to your number for testing)
+# Cascade call list - Priority order
 ALERT_PHONE_NUMBERS = [
     {
         "name": "Person 1 - Primary",
@@ -27,7 +27,7 @@ ALERT_PHONE_NUMBERS = [
     },
     {
         "name": "Person 2 - Secondary", 
-        "number": "+917568735073",
+        "number": "+918149527104",
         "wait_time": 60  # Wait 60 seconds (1 minute)
     },
     {

@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 # Twilio configuration for CASCADE CALLING
 TWILIO_ACCOUNT_SID = "AC091da57b9e4c8866d047628437f43804"
-TWILIO_AUTH_TOKEN = "e7a4867b2b413a0eaad1573a7ca41ade"
+TWILIO_AUTH_TOKEN = "bed3b05e254e8353ae77c58e67dd29b3"
 TWILIO_PHONE_NUMBER = "+13366003611"
 
 # Cascade call list - Priority order (all set to your number for testing)

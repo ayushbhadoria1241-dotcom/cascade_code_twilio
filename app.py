@@ -21,17 +21,17 @@ TWILIO_PHONE_NUMBER = "+13366003611"
 # Cascade call list - Priority order
 ALERT_PHONE_NUMBERS = [
     {
-        "name": "Person 1 - Primary",
+        "name": "ayush bhadoria",
         "number": "+917568735073",
         "wait_time": 60  # Wait 60 seconds (1 minute) before trying next person
     },
     {
-        "name": "Person 2 - Secondary", 
-        "number": "+918149527104",
+        "name": "harekrusna mishra", 
+        "number": "+917568735073",
         "wait_time": 60  # Wait 60 seconds (1 minute)
     },
     {
-        "name": "Person 3 - Tertiary",
+        "name": "mitesh shivramwar",
         "number": "+917568735073",
         "wait_time": 60  # Wait 60 seconds (1 minute)
     }

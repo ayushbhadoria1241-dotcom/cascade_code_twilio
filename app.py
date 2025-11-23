@@ -12,11 +12,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
 # Twilio configuration for CASCADE CALLING
-TWILIO_ACCOUNT_SID = "AC091da57b9e4c8866d047628437f43804"
-TWILIO_AUTH_TOKEN = "bed3b05e254e8353ae77c58e67dd29b3"
-TWILIO_PHONE_NUMBER = "+13366003611"
+# Use environment variables for security - NEVER hardcode credentials!
+TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
+
+# Validate that credentials are set
+if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
+    raise ValueError(
+        "Missing Twilio credentials! Please set environment variables:\n"
+        "  - TWILIO_ACCOUNT_SID\n"
+        "  - TWILIO_AUTH_TOKEN\n"
+        "  - TWILIO_PHONE_NUMBER"
+    )
+
 
 # Cascade call list - Priority order
 ALERT_PHONE_NUMBERS = [

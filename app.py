@@ -41,7 +41,7 @@ ALERT_PHONE_NUMBERS = [
 call_status_tracker = {}
 
 # TwiML Server URL - will use deployed URL when available
-TWIML_BASE_URL = os.getenv('TWIML_SERVER_URL', 'https://twilio-mv1t.onrender.com')
+TWIML_BASE_URL = os.getenv('TWIML_SERVER_URL', 'https://twilio-cascade-calling.onrender.com')
 
 
 def make_twilio_call(to_number, dag_id, task_id, state):

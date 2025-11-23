@@ -12,6 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
 # Twilio configuration for CASCADE CALLING
 # Use environment variables for security - NEVER hardcode credentials!
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
@@ -26,7 +27,6 @@ if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
         "  - TWILIO_AUTH_TOKEN\n"
         "  - TWILIO_PHONE_NUMBER"
     )
-
 
 # Cascade call list - Priority order
 ALERT_PHONE_NUMBERS = [
@@ -61,6 +61,20 @@ def make_twilio_call(to_number, dag_id, task_id, state):
         
         # Build the TwiML URL with parameters (using your deployed Render server)
         twiml_url = f"{TWIML_BASE_URL}/airflow-alert?dag_id={dag_id}&task_id={task_id}&state={state}"
+        
+        logger.info(f"📞 Making call to {to_number}")
+        logger.info(f"🔗 TwiML URL: {twiml_url}")
+        
+        # Verify TwiML URL is accessible before making call
+        try:
+            twiml_check = requests.get(twiml_url, timeout=5)
+            if twiml_check.status_code == 200:
+                logger.info(f"✅ TwiML URL is accessible (Status: {twiml_check.status_code})")
+            else:
+                logger.warning(f"⚠️ TwiML URL returned status {twiml_check.status_code}")
+        except Exception as e:
+            logger.error(f"❌ TwiML URL not accessible: {str(e)}")
+            logger.error(f"   This might cause silent calls! Check if Render service is awake.")
         
         data = {
             "From": TWILIO_PHONE_NUMBER,
@@ -202,6 +216,8 @@ def airflow_alert():
     dag_id = request.values.get('dag_id', 'unknown DAG')
     task_id = request.values.get('task_id', 'unknown task')
     state = request.values.get('state', 'failed')
+    
+    logger.info(f"📞 TwiML requested - DAG: {dag_id}, Task: {task_id}, State: {state}")
     
     # Clean up underscores for better speech
     dag_id_spoken = dag_id.replace('_', ' ')

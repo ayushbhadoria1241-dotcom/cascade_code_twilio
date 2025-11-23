@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from twilio.twiml.voice_response import VoiceResponse
+from twilio.rest import Client
 import requests
 import json
 import os
@@ -27,6 +28,67 @@ if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
         "  - TWILIO_AUTH_TOKEN\n"
         "  - TWILIO_PHONE_NUMBER"
     )
+
+twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+def send_sms_alert(to_number, dag_id, task_id, state, contact_name):
+    """Send SMS alert to a phone number"""
+    try:
+        # Create SMS message
+        message_body = (
+            f"🚨 AIRFLOW ALERT 🚨\n\n"
+            f"DAG: {dag_id}\n"
+            f"Task: {task_id}\n"
+            f"Status: {state}\n\n"
+            f"A call is being placed to you. Please check Grafana dashboard immediately.\n\n"
+            f"- A360 Data Platform Team"
+        )
+        
+        logger.info(f"📱 Sending SMS to {contact_name} ({to_number})")
+        
+        message = twilio_client.messages.create(
+            body=message_body,
+            from_=TWILIO_PHONE_NUMBER,
+            to=to_number
+        )
+        
+        logger.info(f"✅ SMS sent successfully! SID: {message.sid}")
+        
+        return {
+            "success": True,
+            "sid": message.sid,
+            "status": message.status
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending SMS to {to_number}: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
+def send_sms_to_all(dag_id, task_id, state):
+    """Send SMS to all contacts at once (parallel notification)"""
+    logger.info(f"📱 Sending SMS to all {len(ALERT_PHONE_NUMBERS)} contacts...")
+    
+    sms_results = []
+    
+    for contact in ALERT_PHONE_NUMBERS:
+        if contact.get("send_sms", False):
+            result = send_sms_alert(
+                contact["number"],
+                dag_id,
+                task_id,
+                state,
+                contact["name"]
+            )
+            sms_results.append({
+                "name": contact["name"],
+                "number": contact["number"],
+                "result": result
+            })
+            # Small delay to avoid rate limiting
+            time.sleep(0.5)
+    
+    return sms_results
 
 # Cascade call list - Priority order
 ALERT_PHONE_NUMBERS = [
@@ -208,7 +270,7 @@ def cascade_calling_logic(dag_id, task_id, state, alert_id):
 
 @app.route('/')
 def home():
-    return "Twilio TwiML Server with CASCADE CALLING is running!"
+    return "Twilio TwiML Server: CASCADE CALLING (independent) + SMS ALERTS (independent) is running!"
 
 @app.route('/airflow-alert', methods=['GET', 'POST'])
 def airflow_alert():
@@ -350,6 +412,33 @@ def grafana_cascade_call_webhook():
         logger.error(f"❌ Webhook error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+# ======================== SMS-ONLY ENDPOINT ========================
+
+@app.route('/send-sms-only', methods=['POST'])
+def send_sms_only():
+    """Send SMS without making calls - useful for low-priority alerts"""
+    try:
+        data = request.json
+        
+        dag_id = data.get("dag_id", "unknown_dag")
+        task_id = data.get("task_id", "unknown_task")
+        state = data.get("state", "failed")
+        
+        logger.info(f"📱 SMS-only alert: DAG={dag_id}, Task={task_id}, State={state}")
+        
+        # Send SMS to all contacts
+        sms_results = send_sms_to_all(dag_id, task_id, state)
+        
+        return jsonify({
+            "status": "SMS sent",
+            "dag_id": dag_id,
+            "task_id": task_id,
+            "sms_results": sms_results
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ SMS-only error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -458,6 +547,7 @@ if __name__ == '__main__':
     print("   - Home: http://localhost:5001/", flush=True)
     print("   - TwiML Alert: http://localhost:5001/airflow-alert", flush=True)
     print("   - Grafana Cascade: http://localhost:5001/grafana-cascade-call", flush=True)
+    print("   - SMS Only Alert: http://localhost:5001/send-sms-only (POST)", flush=True)
     print("   - Health Check: http://localhost:5001/health", flush=True)
     print("   - Test Cascade: http://localhost:5001/test-cascade (POST)", flush=True)
     print("   - Call History: http://localhost:5001/call-history", flush=True)

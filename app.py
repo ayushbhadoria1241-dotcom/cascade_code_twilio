@@ -101,7 +101,9 @@ def send_sms_alert(to_number, dag_id, task_id, state, contact_name):
         message = twilio_client.messages.create(
             body=message_body,
             from_=TWILIO_SMS_NUMBER,  # Use SMS number
-            to=to_number
+            to=to_number,
+            # Optional: Add status callback to track delivery
+            status_callback=f"{TWIML_BASE_URL}/sms-status"
         )
         
         logger.info(f"✅ SMS sent successfully! SID: {message.sid}, Status: {message.status}")

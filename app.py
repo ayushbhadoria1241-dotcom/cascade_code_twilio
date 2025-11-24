@@ -29,7 +29,14 @@ if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
         "  - TWILIO_PHONE_NUMBER"
     )
 
-twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+try:
+    twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    logger.info("✅ Twilio client initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize Twilio client: {str(e)}")
+    twilio_client = None
+    
+
 
 def send_sms_alert(to_number, dag_id, task_id, state, contact_name):
     """Send SMS alert to a phone number"""
@@ -63,7 +70,6 @@ def send_sms_alert(to_number, dag_id, task_id, state, contact_name):
     except Exception as e:
         logger.error(f"❌ Error sending SMS to {to_number}: {str(e)}")
         return {"success": False, "error": str(e)}
-
 
 def send_sms_to_all(dag_id, task_id, state):
     """Send SMS to all contacts at once (parallel notification)"""
@@ -503,6 +509,32 @@ def test_cascade():
         "message": "This is a TEST. Calls will be made to demonstrate cascade functionality."
     }), 200
 
+@app.route('/test-sms', methods=['POST'])
+def test_sms():
+    """Test SMS functionality only"""
+    try:
+        logger.info("🧪 Testing SMS functionality...")
+        
+        # Send test SMS to all contacts
+        sms_results = send_sms_to_all(
+            "test_dag",
+            "test_task",
+            "testing"
+        )
+        
+        return jsonify({
+            "status": "SMS test completed",
+            "sms_results": sms_results,
+            "from_number": TWILIO_PHONE_NUMBER,
+            "contacts_messaged": len(sms_results)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "Error",
+            "error": str(e)
+        }), 500
+
 
 @app.route('/test-direct-call', methods=['POST'])
 def test_direct_call():
@@ -550,6 +582,7 @@ if __name__ == '__main__':
     print("   - SMS Only Alert: http://localhost:5001/send-sms-only (POST)", flush=True)
     print("   - Health Check: http://localhost:5001/health", flush=True)
     print("   - Test Cascade: http://localhost:5001/test-cascade (POST)", flush=True)
+    print("   - Test SMS: http://localhost:5001/test-sms (POST)", flush=True)
     print("   - Call History: http://localhost:5001/call-history", flush=True)
     print("=" * 70, flush=True)
     sys.stdout.flush()

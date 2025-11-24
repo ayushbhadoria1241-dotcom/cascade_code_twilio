@@ -85,14 +85,15 @@ def send_sms_alert(to_number, dag_id, task_id, state, contact_name):
             return {"success": False, "error": "Twilio client not initialized"}
         
         # Create SMS message
-        message_body = (
-            f"🚨 AIRFLOW ALERT 🚨\n\n"
-            f"DAG: {dag_id}\n"
-            f"Task: {task_id}\n"
-            f"Status: {state}\n\n"
-            f"A call is being placed to you. Please check Grafana dashboard immediately.\n\n"
-            f"- A360 Data Platform Team"
-        )
+        message_body = f"ALERT: {dag_id}/{task_id} {state}. Check dashboard now."
+        # message_body = (
+        #     f"🚨 AIRFLOW ALERT 🚨\n\n"
+        #     f"DAG: {dag_id}\n"
+        #     f"Task: {task_id}\n"
+        #     f"Status: {state}\n\n"
+        #     f"A call is being placed to you. Please check Grafana dashboard immediately.\n\n"
+        #     f"- A360 Data Platform Team"
+        # )
         
         logger.info(f"📱 Sending SMS to {contact_name} ({to_number})")
         logger.info(f"📝 Message: {message_body[:50]}...")

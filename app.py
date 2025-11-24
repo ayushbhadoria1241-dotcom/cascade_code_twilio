@@ -14,11 +14,12 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Twilio configuration for CASCADE CALLING
+# Twilio configuration for CASCADE CALLING and SMS
 # Use environment variables for security - NEVER hardcode credentials!
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
-TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
+TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')  # For voice calls
+TWILIO_SMS_NUMBER = os.getenv('TWILIO_SMS_NUMBER', TWILIO_PHONE_NUMBER)  # For SMS (defaults to same number)
 
 # Validate that credentials are set
 if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
@@ -26,21 +27,63 @@ if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
         "Missing Twilio credentials! Please set environment variables:\n"
         "  - TWILIO_ACCOUNT_SID\n"
         "  - TWILIO_AUTH_TOKEN\n"
-        "  - TWILIO_PHONE_NUMBER"
+        "  - TWILIO_PHONE_NUMBER\n"
+        "  - TWILIO_SMS_NUMBER (optional, defaults to TWILIO_PHONE_NUMBER)"
     )
 
+# Initialize Twilio client for SMS
 try:
     twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     logger.info("✅ Twilio client initialized successfully")
+    logger.info(f"📞 Voice number: {TWILIO_PHONE_NUMBER}")
+    logger.info(f"📱 SMS number: {TWILIO_SMS_NUMBER}")
 except Exception as e:
     logger.error(f"❌ Failed to initialize Twilio client: {str(e)}")
     twilio_client = None
-    
+
+# Cascade call list - Priority order
+ALERT_PHONE_NUMBERS = [
+    {
+        "name": "ayush bhadoria",
+        "number": "+917568735073",
+        "wait_time": 60,  # Wait 60 seconds (1 minute) before trying next person
+        "send_sms": True   # MUST BE TRUE TO SEND SMS
+    },
+    {
+        "name": "harekrusna mishra", 
+        "number": "+917568735073",
+        "wait_time": 60,  # Wait 60 seconds (1 minute)
+        "send_sms": True   # MUST BE TRUE TO SEND SMS
+    },
+    {
+        "name": "mitesh shivramwar",
+        "number": "+917568735073",
+        "wait_time": 60,  # Wait 60 seconds (1 minute)
+        "send_sms": True   # MUST BE TRUE TO SEND SMS
+    }
+]
+
+logger.info("=" * 70)
+logger.info("📱 SMS Configuration:")
+for contact in ALERT_PHONE_NUMBERS:
+    sms_enabled = "✅ ENABLED" if contact.get("send_sms", False) else "❌ DISABLED"
+    logger.info(f"   {contact['name']}: {sms_enabled}")
+logger.info("=" * 70)
+
+# Store call status for tracking
+call_status_tracker = {}
+
+# TwiML Server URL - will use deployed URL when available
+TWIML_BASE_URL = os.getenv('TWIML_SERVER_URL', 'https://twilio-cascade-calling.onrender.com')
 
 
 def send_sms_alert(to_number, dag_id, task_id, state, contact_name):
     """Send SMS alert to a phone number"""
     try:
+        if twilio_client is None:
+            logger.error("❌ Twilio client not initialized! Cannot send SMS.")
+            return {"success": False, "error": "Twilio client not initialized"}
+        
         # Create SMS message
         message_body = (
             f"🚨 AIRFLOW ALERT 🚨\n\n"
@@ -52,33 +95,41 @@ def send_sms_alert(to_number, dag_id, task_id, state, contact_name):
         )
         
         logger.info(f"📱 Sending SMS to {contact_name} ({to_number})")
+        logger.info(f"📝 Message: {message_body[:50]}...")
         
         message = twilio_client.messages.create(
             body=message_body,
-            from_=TWILIO_PHONE_NUMBER,
+            from_=TWILIO_SMS_NUMBER,  # Use SMS number
             to=to_number
         )
         
-        logger.info(f"✅ SMS sent successfully! SID: {message.sid}")
+        logger.info(f"✅ SMS sent successfully! SID: {message.sid}, Status: {message.status}")
         
         return {
             "success": True,
             "sid": message.sid,
-            "status": message.status
+            "status": message.status,
+            "to": to_number
         }
         
     except Exception as e:
         logger.error(f"❌ Error sending SMS to {to_number}: {str(e)}")
-        return {"success": False, "error": str(e)}
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        return {"success": False, "error": str(e), "to": to_number}
+
 
 def send_sms_to_all(dag_id, task_id, state):
     """Send SMS to all contacts at once (parallel notification)"""
     logger.info(f"📱 Sending SMS to all {len(ALERT_PHONE_NUMBERS)} contacts...")
+    logger.info(f"📋 Alert details - DAG: {dag_id}, Task: {task_id}, State: {state}")
     
     sms_results = []
     
     for contact in ALERT_PHONE_NUMBERS:
+        logger.info(f"🔍 Checking contact: {contact['name']} - send_sms flag: {contact.get('send_sms', False)}")
+        
         if contact.get("send_sms", False):
+            logger.info(f"✅ Sending SMS to {contact['name']}")
             result = send_sms_alert(
                 contact["number"],
                 dag_id,
@@ -93,33 +144,11 @@ def send_sms_to_all(dag_id, task_id, state):
             })
             # Small delay to avoid rate limiting
             time.sleep(0.5)
+        else:
+            logger.warning(f"⏭️ Skipping {contact['name']} - send_sms is False")
     
+    logger.info(f"📊 SMS sending complete. Results: {len(sms_results)} messages attempted")
     return sms_results
-
-# Cascade call list - Priority order
-ALERT_PHONE_NUMBERS = [
-    {
-        "name": "ayush bhadoria",
-        "number": "+917568735073",
-        "wait_time": 60  # Wait 60 seconds (1 minute) before trying next person
-    },
-    {
-        "name": "harekrusna mishra", 
-        "number": "+917568735073",
-        "wait_time": 60  # Wait 60 seconds (1 minute)
-    },
-    {
-        "name": "mitesh shivramwar",
-        "number": "+917568735073",
-        "wait_time": 60  # Wait 60 seconds (1 minute)
-    }
-]
-
-# Store call status for tracking
-call_status_tracker = {}
-
-# TwiML Server URL - will use deployed URL when available
-TWIML_BASE_URL = os.getenv('TWIML_SERVER_URL', 'https://twilio-cascade-calling.onrender.com')
 
 
 def make_twilio_call(to_number, dag_id, task_id, state):
@@ -418,6 +447,7 @@ def grafana_cascade_call_webhook():
         logger.error(f"❌ Webhook error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 # ======================== SMS-ONLY ENDPOINT ========================
 
 @app.route('/send-sms-only', methods=['POST'])
@@ -446,15 +476,16 @@ def send_sms_only():
         logger.error(f"❌ SMS-only error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
     return jsonify({
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "service": "TwiML Server with Cascade Calling",
+        "service": "TwiML Server: Cascade Calling + Independent SMS",
         "contact_count": len(ALERT_PHONE_NUMBERS),
-        "contacts": [{"name": c["name"], "number": c["number"], "wait_time": c["wait_time"]} for c in ALERT_PHONE_NUMBERS]
+        "contacts": [{"name": c["name"], "number": c["number"], "wait_time": c["wait_time"], "sms_enabled": c.get("send_sms", False)} for c in ALERT_PHONE_NUMBERS]
     }), 200
 
 
@@ -509,11 +540,21 @@ def test_cascade():
         "message": "This is a TEST. Calls will be made to demonstrate cascade functionality."
     }), 200
 
+
 @app.route('/test-sms', methods=['POST'])
 def test_sms():
     """Test SMS functionality only"""
     try:
         logger.info("🧪 Testing SMS functionality...")
+        
+        # Check Twilio client
+        if twilio_client is None:
+            return jsonify({
+                "status": "Error",
+                "error": "Twilio client not initialized. Check your credentials.",
+                "twilio_account_sid": TWILIO_ACCOUNT_SID[:10] + "..." if TWILIO_ACCOUNT_SID else "NOT SET",
+                "twilio_phone_number": TWILIO_PHONE_NUMBER
+            }), 500
         
         # Send test SMS to all contacts
         sms_results = send_sms_to_all(
@@ -525,15 +566,19 @@ def test_sms():
         return jsonify({
             "status": "SMS test completed",
             "sms_results": sms_results,
-            "from_number": TWILIO_PHONE_NUMBER,
-            "contacts_messaged": len(sms_results)
+            "from_number": TWILIO_SMS_NUMBER,
+            "contacts_messaged": len(sms_results),
+            "twilio_client_initialized": twilio_client is not None
         }), 200
         
     except Exception as e:
+        logger.error(f"❌ Test SMS error: {str(e)}")
         return jsonify({
             "status": "Error",
-            "error": str(e)
+            "error": str(e),
+            "error_type": type(e).__name__
         }), 500
+
 
 @app.route('/debug-config', methods=['GET'])
 def debug_config():
@@ -553,7 +598,8 @@ def debug_config():
             for c in ALERT_PHONE_NUMBERS
         ]
     }), 200
-    
+
+
 @app.route('/test-direct-call', methods=['POST'])
 def test_direct_call():
     """Test a single direct call to debug Twilio connection"""
@@ -587,16 +633,17 @@ def test_direct_call():
 if __name__ == '__main__':
     import sys
     print("=" * 70, flush=True)
-    print("*** Twilio TwiML Server with CASCADE CALLING ***", flush=True)
+    print("*** Twilio TwiML Server: CASCADE CALLING + INDEPENDENT SMS ***", flush=True)
     print("=" * 70, flush=True)
     print("Cascade contact list:", flush=True)
     for idx, contact in enumerate(ALERT_PHONE_NUMBERS, 1):
-        print(f"   {idx}. {contact['name']} - {contact['number']} (wait: {contact['wait_time']}s)", flush=True)
+        sms_status = "✓ SMS" if contact.get("send_sms", False) else "✗ No SMS"
+        print(f"   {idx}. {contact['name']} - {contact['number']} (wait: {contact['wait_time']}s) [{sms_status}]", flush=True)
     print("=" * 70, flush=True)
     print("Server endpoints:", flush=True)
     print("   - Home: http://localhost:5001/", flush=True)
     print("   - TwiML Alert: http://localhost:5001/airflow-alert", flush=True)
-    print("   - Grafana Cascade: http://localhost:5001/grafana-cascade-call", flush=True)
+    print("   - Grafana Cascade (Calls Only): http://localhost:5001/grafana-cascade-call", flush=True)
     print("   - SMS Only Alert: http://localhost:5001/send-sms-only (POST)", flush=True)
     print("   - Health Check: http://localhost:5001/health", flush=True)
     print("   - Test Cascade: http://localhost:5001/test-cascade (POST)", flush=True)

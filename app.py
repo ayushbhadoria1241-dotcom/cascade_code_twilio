@@ -535,7 +535,25 @@ def test_sms():
             "error": str(e)
         }), 500
 
-
+@app.route('/debug-config', methods=['GET'])
+def debug_config():
+    """Debug endpoint to check Twilio configuration"""
+    return jsonify({
+        "twilio_account_sid": TWILIO_ACCOUNT_SID[:10] + "..." if TWILIO_ACCOUNT_SID else "NOT SET",
+        "twilio_auth_token": "SET" if TWILIO_AUTH_TOKEN else "NOT SET",
+        "twilio_phone_number_voice": TWILIO_PHONE_NUMBER,
+        "twilio_phone_number_sms": TWILIO_SMS_NUMBER,
+        "twilio_client_initialized": twilio_client is not None,
+        "contacts_with_sms": [
+            {
+                "name": c["name"], 
+                "number": c["number"], 
+                "send_sms": c.get("send_sms", False)
+            } 
+            for c in ALERT_PHONE_NUMBERS
+        ]
+    }), 200
+    
 @app.route('/test-direct-call', methods=['POST'])
 def test_direct_call():
     """Test a single direct call to debug Twilio connection"""
